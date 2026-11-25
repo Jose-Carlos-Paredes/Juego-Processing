@@ -8,21 +8,68 @@ final float ANCHO = 1000;
 final float ALTO = 600;
 
 // ==========================================
-// MAPA: 3 PISOS POR LADO Y POZO EN EL CENTRO
+// SISTEMA DE MAPAS ALEATORIOS (SIN PISO BASE)
 // {x, y, ancho, alto, atravesable (1=sí, 0=no)}
-// Separación vertical: 165px (1 salto=120px, 2 saltos=240px)
 // ==========================================
-float[][] plataformas = {
-  // Lado Izquierdo
-  {0,   530, 350, 25, 0}, // Piso 1 (Base sólida)
-  {0,   365, 320, 20, 1}, // Piso 2
-  {0,   200, 290, 20, 1}, // Piso 3
+float[][][] mapas = {
+  // MAPA 0: 3 plataformas a cada lado + 1 en el medio
+  {
+    {30,  520, 260, 20, 0},
+    {30,  355, 230, 20, 1},
+    {30,  190, 200, 20, 1},
+    {375, 420, 250, 20, 1}, // Plataforma central
+    {710, 520, 260, 20, 0},
+    {740, 355, 230, 20, 1},
+    {770, 190, 200, 20, 1}
+  },
   
-  // Lado Derecho
-  {650, 530, 350, 25, 0}, // Piso 1 (Base sólida)
-  {680, 365, 320, 20, 1}, // Piso 2
-  {710, 200, 290, 20, 1}  // Piso 3
+  // MAPA 1: 3 plataformas en el medio y vacío abajo
+  {
+    {280, 520, 440, 20, 0},
+    {330, 355, 340, 20, 1},
+    {380, 190, 240, 20, 1}
+  },
+  
+  // MAPA 2: Pirámide de islas flotantes
+  {
+    {60,  510, 240, 20, 0},
+    {700, 510, 240, 20, 0},
+    {220, 360, 200, 20, 1},
+    {580, 360, 200, 20, 1},
+    {400, 210, 200, 20, 1}
+  },
+  
+  // MAPA 3: Puentes rotos
+  {
+    {40,  500, 220, 20, 0},
+    {310, 400, 150, 20, 1},
+    {540, 400, 150, 20, 1},
+    {740, 500, 220, 20, 0},
+    {350, 230, 300, 20, 1}
+  },
+  
+  // MAPA 4: Torres gemelas con pozo en el centro
+  {
+    {0,   530, 350, 25, 0},
+    {0,   365, 320, 20, 1},
+    {0,   200, 290, 20, 1},
+    {650, 530, 350, 25, 0},
+    {680, 365, 320, 20, 1},
+    {710, 200, 290, 20, 1}
+  }
 };
+
+// Posiciones de inicio {xJ1, yJ1, xJ2, yJ2} para cada mapa
+float[][] spawnsMapas = {
+  {150, 470, 850, 470}, // Mapa 0
+  {360, 470, 640, 470}, // Mapa 1
+  {180, 460, 820, 460}, // Mapa 2
+  {150, 450, 850, 450}, // Mapa 3
+  {150, 480, 850, 480}  // Mapa 4
+};
+
+int mapaActual = 0;
+float[][] plataformas = mapas[0];
 
 // ==========================================
 // VARIABLES DE RED (SERVIDOR / CLIENTE)
@@ -442,6 +489,7 @@ void enviarEstadoJuego() {
   
   StringBuilder sb = new StringBuilder();
   sb.append("ST|").append(estadoJuego).append("|");
+  sb.append(mapaActual).append("|");
   sb.append(puntosJ1).append(",").append(puntosJ2).append("|");
   sb.append(int(j1.x)).append(",").append(int(j1.y)).append(",").append(j1.vida).append(",").append(j1.armaEquipada).append(",").append(j1.direccionMirada).append(",").append(tRest1).append("|");
   sb.append(int(j2.x)).append(",").append(int(j2.y)).append(",").append(j2.vida).append(",").append(j2.armaEquipada).append(",").append(j2.direccionMirada).append(",").append(tRest2).append("|");
@@ -478,24 +526,30 @@ void aplicarEstadoCliente() {
   if (estado == null || estado.length() == 0) return;
   
   String[] partes = split(estado, '|');
-  if (partes.length < 7) return;
+  if (partes.length < 8) return;
   
   estadoJuego = int(partes[1]);
   
-  String[] pts = split(partes[2], ',');
+  int mapaRecibido = int(partes[2]);
+  if (mapaRecibido >= 0 && mapaRecibido < mapas.length) {
+    mapaActual = mapaRecibido;
+    plataformas = mapas[mapaActual];
+  }
+  
+  String[] pts = split(partes[3], ',');
   if (pts.length == 2) {
     puntosJ1 = int(pts[0]);
     puntosJ2 = int(pts[1]);
   }
   
-  String[] d1 = split(partes[3], ',');
+  String[] d1 = split(partes[4], ',');
   if (d1.length == 6) {
     j1.x = float(d1[0]); j1.y = float(d1[1]); j1.vida = int(d1[2]);
     j1.armaEquipada = int(d1[3]); j1.direccionMirada = int(d1[4]);
     j1.tiempoInicioArma = millis() - (j1.duracionArma - int(d1[5]));
   }
   
-  String[] d2 = split(partes[4], ',');
+  String[] d2 = split(partes[5], ',');
   if (d2.length == 6) {
     j2.x = float(d2[0]); j2.y = float(d2[1]); j2.vida = int(d2[2]);
     j2.armaEquipada = int(d2[3]); j2.direccionMirada = int(d2[4]);
@@ -503,8 +557,8 @@ void aplicarEstadoCliente() {
   }
   
   balas.clear();
-  if (!partes[5].equals("NONE")) {
-    String[] listaB = split(partes[5], ';');
+  if (!partes[6].equals("NONE")) {
+    String[] listaB = split(partes[6], ';');
     for (String item : listaB) {
       String[] xy = split(item, ',');
       if (xy.length == 2) balas.add(new Bala(float(xy[0]), float(xy[1]), 0, 0, color(255), null));
@@ -512,8 +566,8 @@ void aplicarEstadoCliente() {
   }
   
   armasEnPiso.clear();
-  if (!partes[6].equals("NONE")) {
-    String[] listaA = split(partes[6], ';');
+  if (!partes[7].equals("NONE")) {
+    String[] listaA = split(partes[7], ';');
     for (String item : listaA) {
       String[] xyt = split(item, ',');
       if (xyt.length == 3) armasEnPiso.add(new ArmaItem(float(xyt[0]), float(xyt[1]), int(xyt[2])));
@@ -553,10 +607,11 @@ void jugarPartida() {
     }
   }
   
-  // 1. GENERADOR DE ARMAS (más rápido: cada 3.5 a 6.5 segundos)
+  // 1. GENERADOR DE ARMAS (siempre cae sobre alguna plataforma del mapa actual)
   if (millis() - temporizadorArmas > tiempoProximaArma) {
     int tipoRandom = int(random(1, 4));
-    float xArma = (random(1) < 0.5) ? random(40, 280) : random(720, 960);
+    float[] platElegida = plataformas[int(random(plataformas.length))];
+    float xArma = random(platElegida[0] + 25, platElegida[0] + platElegida[2] - 25);
     armasEnPiso.add(new ArmaItem(xArma, -50, tipoRandom));
     temporizadorArmas = millis();
     tiempoProximaArma = int(random(3500, 6500)); 
@@ -633,7 +688,7 @@ void dibujarPantallaFin() {
   fill(255); 
   textSize(24);
   if (!modoOnline || esServidor) {
-    text("PRESIONÁ 'R' PARA JUGAR LA REVANCHA", ANCHO/2, ALTO/2 + 50);
+    text("PRESIONÁ 'R' PARA JUGAR LA REVANCHA (MAPA NUEVO)", ANCHO/2, ALTO/2 + 50);
     if (teclas['r'] || teclas['R']) reiniciarPartida();
   } else {
     text("ESPERANDO QUE EL SERVIDOR REINICIE...", ANCHO/2, ALTO/2 + 50);
@@ -648,14 +703,23 @@ void dibujarPantallaFin() {
 }
 
 void reiniciarPartida() {
+  // Elegimos un mapa aleatorio distinto al anterior
+  int nuevoMapa = int(random(mapas.length));
+  while (nuevoMapa == mapaActual && mapas.length > 1) {
+    nuevoMapa = int(random(mapas.length));
+  }
+  mapaActual = nuevoMapa;
+  plataformas = mapas[mapaActual];
+  
   balas = new ArrayList<Bala>();
   armasEnPiso = new ArrayList<ArmaItem>();
   estadoJuego = 1; 
   temporizadorArmas = millis();
   tiempoProximaArma = int(random(1500, 3000)); 
   
-  j1 = new Jugador(150, 480, color(255, 50, 50), 'a', 'd', 'w', 's', 'g', 'f'); 
-  j2 = new Jugador(850, 480, color(50, 100, 255), LEFT, RIGHT, UP, DOWN, 'ñ', 'l');
+  float[] sp = spawnsMapas[mapaActual];
+  j1 = new Jugador(sp[0], sp[1], color(255, 50, 50), 'a', 'd', 'w', 's', 'g', 'f'); 
+  j2 = new Jugador(sp[2], sp[3], color(50, 100, 255), LEFT, RIGHT, UP, DOWN, 'ñ', 'l');
 }
 
 void evitarTraspasoJugadores() {
